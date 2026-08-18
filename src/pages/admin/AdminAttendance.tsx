@@ -23,6 +23,7 @@ export default function AdminAttendance() {
   const [records, setRecords] = useState<Record[]>([]);
   const [staff, setStaff] = useState<StaffOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [filters, setFilters] = useState({ date: "", userId: "", month: "", year: "", status: "" });
   const [editing, setEditing] = useState<Record | null>(null);
   const [exportRange, setExportRange] = useState({ startDate: "", endDate: "" });
@@ -34,13 +35,19 @@ export default function AdminAttendance() {
 
   async function load() {
     setLoading(true);
-    const params = new URLSearchParams();
-    Object.entries(filters).forEach(([k, v]) => {
-      if (v) params.set(k, v);
-    });
-    const data = await api.get<{ records: Record[] }>(`/attendance-list?${params.toString()}`);
-    setRecords(data.records);
-    setLoading(false);
+    setLoadError(null);
+    try {
+      const params = new URLSearchParams();
+      Object.entries(filters).forEach(([k, v]) => {
+        if (v) params.set(k, v);
+      });
+      const data = await api.get<{ records: Record[] }>(`/attendance-list?${params.toString()}`);
+      setRecords(data.records);
+    } catch (err) {
+      setLoadError("Could not load attendance records. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -174,6 +181,12 @@ export default function AdminAttendance() {
               <tr>
                 <td className="px-4 py-6 text-forest-400" colSpan={7}>
                   Loading…
+                </td>
+              </tr>
+            ) : loadError ? (
+              <tr>
+                <td className="px-4 py-6 text-clay-500" colSpan={7}>
+                  {loadError}
                 </td>
               </tr>
             ) : records.length === 0 ? (

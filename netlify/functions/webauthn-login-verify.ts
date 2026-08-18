@@ -28,13 +28,18 @@ export const handler: Handler = async (event) => {
 
   const { data: user } = await supabase
     .from("users")
-    .select("id, name, email, role, is_active")
+    .select("id, name, email, role, is_active, email_verified")
     .eq("email", email)
     .maybeSingle();
 
   if (!user || !user.is_active) {
     await logAction(null, "passkey_login_failed", { email, reason: "not_found_or_inactive" });
     return fail(401, "We couldn't sign you in. Please try again.");
+  }
+
+  if (!user.email_verified) {
+    await logAction(user.id, "passkey_login_failed", { reason: "email_not_verified" });
+    return fail(403, "Please confirm your email address before logging in. Check your inbox for the confirmation link.");
   }
 
   const { data: credRow } = await supabase

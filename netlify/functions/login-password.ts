@@ -31,7 +31,7 @@ export const handler: Handler = async (event) => {
 
   const { data: user } = await supabase
     .from("users")
-    .select("id, name, email, password_hash, role, is_active")
+    .select("id, name, email, password_hash, role, is_active, email_verified")
     .eq("email", email)
     .maybeSingle();
 
@@ -44,6 +44,11 @@ export const handler: Handler = async (event) => {
   if (!valid) {
     await logAction(user.id, "login_failed", { reason: "bad_password" });
     return fail(401, "Incorrect email or password.");
+  }
+
+  if (!user.email_verified) {
+    await logAction(user.id, "login_failed", { reason: "email_not_verified" });
+    return fail(403, "Please confirm your email address before logging in. Check your inbox for the confirmation link.");
   }
 
   const { data: credentials } = await supabase

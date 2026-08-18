@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api } from "../../lib/api";
+import { api, ApiError } from "../../lib/api";
 
 interface StaffMember {
   id: string;
@@ -13,6 +13,7 @@ interface StaffMember {
 export default function AdminStaff() {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteTarget, setDeleteTarget] = useState<StaffMember | null>(null);
 
   async function load() {
     setLoading(true);
@@ -42,7 +43,7 @@ export default function AdminStaff() {
       <p className="mt-1 text-sm text-forest-400">{staff.length} registered accounts</p>
 
       <div className="mt-6 overflow-x-auto rounded-xl2 bg-white shadow-sm">
-        <table className="w-full min-w-[640px] text-left text-sm">
+        <table className="w-full min-w-[720px] text-left text-sm">
           <thead className="border-b border-forest-50 text-forest-400">
             <tr>
               <th className="px-4 py-3">Name</th>
@@ -80,12 +81,15 @@ export default function AdminStaff() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-forest-400">{new Date(m.created_at).toLocaleDateString()}</td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
                     <button onClick={() => toggleRole(m)} className="mr-3 text-sm text-forest-600 underline">
                       {m.role === "admin" ? "Make Staff" : "Make Admin"}
                     </button>
-                    <button onClick={() => toggleActive(m)} className="text-sm text-clay-500 underline">
+                    <button onClick={() => toggleActive(m)} className="mr-3 text-sm text-clay-500 underline">
                       {m.is_active ? "Disable" : "Enable"}
+                    </button>
+                    <button onClick={() => setDeleteTarget(m)} className="text-sm text-red-600 underline">
+                      Delete
                     </button>
                   </td>
                 </tr>
@@ -93,6 +97,86 @@ export default function AdminStaff() {
             )}
           </tbody>
         </table>
+      </div>
+
+      {deleteTarget && (
+        <DeleteConfirmModal
+          member={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onDeleted={() => {
+            setDeleteTarget(null);
+            load();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function DeleteConfirmModal({
+  member,
+  onClose,
+  onDeleted
+}: {
+  member: StaffMember;
+  onClose: () => void;
+  onDeleted: () => void;
+}) {
+  const [confirmText, setConfirmText] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function handleDelete() {
+    setError(null);
+    setBusy(true);
+    try {
+      await api.post("/admin-delete-staff", { userId: member.id, confirm: confirmText });
+      onDeleted();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not delete this account. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 p-4" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-xl2 bg-white p-6" onClick={(e) => e.stopPropagation()}>
+        <h2 className="font-display text-lg text-red-600">Delete this account?</h2>
+        <p className="mt-2 text-sm text-forest-400">
+          This will permanently delete <strong>{member.name}</strong> ({member.email}) and their passkeys. This
+          cannot be undone.
+        </p>
+        <p className="mt-2 text-sm text-forest-400">
+          Their past attendance records will be kept for your history, but will no longer show their name.
+        </p>
+
+        <div className="mt-4">
+          <label className="mb-1 block text-xs text-forest-400">
+            Type <strong>DELETE</strong> to confirm
+          </label>
+          <input
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            className="w-full rounded-lg border border-forest-100 px-3 py-2 text-sm"
+            placeholder="DELETE"
+          />
+        </div>
+
+        {error && <p className="mt-3 text-sm text-clay-500">{error}</p>}
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-full border border-forest-100 px-4 py-2 text-sm">
+            Cancel
+          </button>
+          <button
+            onClick={handleDelete}
+            disabled={busy || confirmText !== "DELETE"}
+            className="rounded-full bg-red-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+          >
+            {busy ? "Deleting…" : "Delete Permanently"}
+          </button>
+        </div>
       </div>
     </div>
   );

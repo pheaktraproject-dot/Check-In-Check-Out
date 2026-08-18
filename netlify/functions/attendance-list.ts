@@ -19,7 +19,7 @@ export const handler: Handler = async (event) => {
 
   let query = supabase
     .from("attendance")
-    .select("id, user_id, work_date, check_in, check_out, status, edited_by_admin, edited_at, edit_note, users(name, email)")
+    .select("id, user_id, work_date, check_in, check_out, status, edited_by_admin, edited_at, edit_note, users!attendance_user_id_fkey(name, email)")
     .order("work_date", { ascending: false });
 
   if (date) query = query.eq("work_date", date);

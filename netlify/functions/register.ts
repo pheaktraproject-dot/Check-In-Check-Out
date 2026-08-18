@@ -1,11 +1,14 @@
 import type { Handler } from "@netlify/functions";
+import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { supabase } from "./_lib/supabase";
 import { ok, fail, parseBody } from "./_lib/http";
-import { signSession } from "./_lib/auth";
 import { logAction } from "./_lib/settings";
+import { sendEmail, verificationEmailHtml } from "./_lib/email";
 
 const ALLOWED_DOMAIN = (process.env.VITE_ALLOWED_EMAIL_DOMAIN ?? "alongsiders.org").toLowerCase();
+const ORIGIN = process.env.ORIGIN ?? "http://localhost:5173";
+const TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 interface RegisterBody {
   name: string;
@@ -50,10 +53,20 @@ export const handler: Handler = async (event) => {
   }
 
   const passwordHash = await bcrypt.hash(password, 12);
+  const verificationToken = crypto.randomBytes(32).toString("base64url");
+  const verificationExpires = new Date(Date.now() + TOKEN_TTL_MS).toISOString();
 
   const { data: created, error } = await supabase
     .from("users")
-    .insert({ name, email, password_hash: passwordHash, role: "staff" })
+    .insert({
+      name,
+      email,
+      password_hash: passwordHash,
+      role: "staff",
+      email_verified: false,
+      verification_token: verificationToken,
+      verification_expires: verificationExpires
+    })
     .select("id, name, email, role")
     .single();
 
@@ -63,10 +76,21 @@ export const handler: Handler = async (event) => {
 
   await logAction(created.id, "register", { email });
 
-  // Issue a session right away so the client can immediately follow up with
-  // a WebAuthn registration ceremony (adding a passkey) while authenticated.
-  // From then on, the person logs in with the passkey, not this password.
-  const token = signSession({ sub: created.id, email: created.email, role: created.role });
+  const verifyUrl = `${ORIGIN}/verify-email?token=${verificationToken}`;
+  try {
+    await sendEmail(email, "Confirm your Alongsiders Attendance account", verificationEmailHtml(name, verifyUrl));
+  } catch {
+    // The account was created either way — the person can request the email
+    // again from the login page if it doesn't arrive.
+    await logAction(created.id, "verification_email_failed");
+  }
 
-  return ok({ user: created, token }, 201);
+  // No session token is issued here on purpose. The account cannot be used
+  // to log in (password or passkey) until the email link is clicked.
+  return ok(
+    {
+      message: "Account created. Please check your email to confirm your address before signing in."
+    },
+    201
+  );
 };

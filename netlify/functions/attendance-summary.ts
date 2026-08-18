@@ -25,7 +25,7 @@ export const handler: Handler = async (event) => {
 
   const { data: todayRows } = await supabase
     .from("attendance")
-    .select("id, user_id, work_date, check_in, check_out, status, edited_by_admin, edited_at, edit_note, users!attendance_user_id_fkey(name, email)
+    .select("id, user_id, work_date, check_in, check_out, status, edited_by_admin, edited_at, edit_note, users!attendance_user_id_fkey(name, email);
     .eq("work_date", today);
 
   const computed = (todayRows ?? []).map((r: any) => computeRow(r, settings));

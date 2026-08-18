@@ -9,6 +9,8 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -21,6 +23,7 @@ export default function Login() {
   async function handlePasskeyLogin(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setNeedsVerification(false);
     if (!email.trim()) {
       setError("Please enter your email first.");
       return;
@@ -33,6 +36,9 @@ export default function Login() {
       if (err?.message === "NO_PASSKEY") {
         setShowPassword(true);
         setError("No passkey found for this account yet. Please log in with your password once to set one up.");
+      } else if (err?.status === 403) {
+        setNeedsVerification(true);
+        setError(err.message);
       } else {
         setError("We couldn't sign you in with a passkey. Please try again or use your password.");
         setShowPassword(true);
@@ -45,6 +51,7 @@ export default function Login() {
   async function handlePasswordLogin(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setNeedsVerification(false);
     setBusy(true);
     try {
       const { token, user } = await api.post<{ token: string; user: any }>("/login-password", {
@@ -54,6 +61,22 @@ export default function Login() {
       await afterLogin(token, user);
     } catch (err: any) {
       setError(err.message ?? "Incorrect email or password.");
+      if (err?.status === 403) setNeedsVerification(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleResend() {
+    setResendMessage(null);
+    setBusy(true);
+    try {
+      const data = await api.post<{ message: string }>("/resend-verification", {
+        email: email.trim().toLowerCase()
+      });
+      setResendMessage(data.message);
+    } catch {
+      setResendMessage("Could not send the email right now. Please try again in a moment.");
     } finally {
       setBusy(false);
     }
@@ -84,6 +107,23 @@ export default function Login() {
           </div>
 
           {error && <p className="rounded-xl2 bg-clay-400/10 px-3 py-2 text-sm text-clay-500">{error}</p>}
+
+          {needsVerification && (
+            <div className="rounded-xl2 bg-forest-50 px-3 py-3">
+              {resendMessage ? (
+                <p className="text-sm text-forest-700">{resendMessage}</p>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleResend}
+                  disabled={busy}
+                  className="text-sm font-medium text-forest-700 underline disabled:opacity-50"
+                >
+                  Resend confirmation email
+                </button>
+              )}
+            </div>
+          )}
 
           {!showPassword && (
             <button

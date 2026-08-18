@@ -25,17 +25,19 @@ export const handler: Handler = async (event) => {
 
   const { data: user } = await supabase
     .from("users")
-    .select("id, is_active")
+    .select("id, is_active, email_verified")
     .eq("email", email)
     .maybeSingle();
 
   // Deliberately vague error so this endpoint can't be used to test which
-  // emails have accounts. If there's no matching, active user, still
-  // generate options with no allowCredentials — the browser will simply
-  // fail to find a matching passkey, and we return the same shape either way.
+  // emails have accounts. If there's no matching, active, verified user,
+  // still generate options with no allowCredentials — the browser will
+  // simply fail to find a matching passkey, and we return the same shape
+  // either way.
   const allowCredentials: { id: string; transports?: any }[] = [];
+  const eligible = Boolean(user?.is_active && user?.email_verified);
 
-  if (user?.is_active) {
+  if (eligible && user) {
     const { data: creds } = await supabase
       .from("webauthn_credentials")
       .select("credential_id, transports")
@@ -52,7 +54,7 @@ export const handler: Handler = async (event) => {
     allowCredentials: allowCredentials.length > 0 ? allowCredentials : undefined
   });
 
-  if (user?.is_active) {
+  if (eligible && user) {
     await supabase.from("webauthn_challenges").delete().eq("user_id", user.id).eq("challenge_type", "authentication");
     await supabase.from("webauthn_challenges").insert({
       user_id: user.id,

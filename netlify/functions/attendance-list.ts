@@ -37,7 +37,10 @@ export const handler: Handler = async (event) => {
   }
 
   const { data, error } = await query;
-  if (error) return fail(500, "Could not load attendance records.");
+  if (error) {
+    console.error("attendance-list query error:", JSON.stringify(error));
+    return fail(500, "Could not load attendance records.");
+  }
 
   const settings = await getSettings();
   const rows = (data ?? []).map((r: any) => computeRow(r, settings));
